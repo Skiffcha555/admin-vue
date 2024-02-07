@@ -11,6 +11,7 @@
     "@vue/compiler-sfc": "^3.4.15",
     "axios": "^1.6.7",
     "core-js": "^3.8.3",
+    "mitt": "^3.0.1",
     "monaco-editor": "^0.45.0",
     "monaco-editor-webpack-plugin": "^7.1.0",
     "simple-code-editor": "^2.0.9",

@@ -1,6 +1,8 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import eventBus from './eventBus.js';
 
+window.eventBus = eventBus;
 createApp(App).mount('#app')
 
 // Вопросы и предложения
