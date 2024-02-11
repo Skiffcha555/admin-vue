@@ -8,17 +8,20 @@
     </div>
     <div id="output" class="output">
       <div class="input">
-        <h2>Input</h2>
-        <input v-model="imgSrc" type="text">
+        <div class="data-editor">
+          <input type="text" v-model="input.title" placeholder="Card Title">
+          <input type="text" v-model="input.imageUrl" placeholder="Image URL">
+          <textarea v-model="input.text" placeholder="Card Text"></textarea>
+          <button @click="updateData">Update Data</button>
+        </div>
       </div>
-      <div id="renderTarget">
-      </div>
+      <component :is="dynamicComponent" :key="componentKey" />
     </div>
   </div>
 </template>
 
 <script>
-import { createApp, defineAsyncComponent, h } from "vue"
+import { defineAsyncComponent } from "vue"
 import axios from 'axios';
 import SimpleCodeEditor from 'simple-code-editor';
 
@@ -31,11 +34,18 @@ export default {
       vuejsCode: '<template></template>',
       cssCode: '',
       compiledVuejsCode: '',
-      imgSrc: 'https://kartinki.pics/uploads/posts/2022-12/1670667600_1-kartinkin-net-p-kartinki-ofisa-s-lyudmi-vkontakte-1.jpg',
+      dynamicComponent: null,
+      componentKey: 0,
+      input: {
+        title: '',
+        imageUrl: '',
+        text: ''
+      }
     };
   },
   mounted() {
     this.applyStyles();
+    this.getData();
   },
   created() {
     this.loadSettings();
@@ -51,8 +61,6 @@ export default {
       return response.data
     },
     saveSettings() {
-      window.eventBus.emit('update-imgSrc', this.imgSrc);
-
       axios.post('http://localhost:5000/api/settings', {
         vuejsCode: this.vuejsCode,
         cssCode: this.cssCode
@@ -60,11 +68,6 @@ export default {
         .then((response) => {
           console.log('Settings saved:', response.data);
           try {
-            window.renderTarget.remove()
-            const renderTarget = document.createElement('div')
-            renderTarget.id = 'renderTarget'
-            document.getElementById('output').append(renderTarget)
-            
             this.compileCode();
             this.applyStyles();
           } catch (error) {
@@ -76,62 +79,91 @@ export default {
         });
     },
     async compileCode() {
-  const content = this.vuejsCode;
-  const imgSrc = this.imgSrc; // Предположим, что imgSrc - это пропс, который вы хотите передать
-  const { loadModule } = window['vue3-sfc-loader'];
+      const content = this.vuejsCode;
+      const { loadModule } = window['vue3-sfc-loader'];
 
-  const options = {
-    moduleCache: {
-      vue: window.Vue,
-    },
-    async getFile() {
-      // Замените '/myComponent.vue' на ваш фактический путь или ключ для кэширования
-      return content;
-    },
-    addStyle() {},
-  };
+      const options = {
+        moduleCache: {
+          vue: window.Vue,
+        },
+        async getFile() {
+          return content;
+        },
+        addStyle() { },
+      };
 
-  // Используйте функциональный подход для определения асинхронного компонента
-  const loadComponent = defineAsyncComponent(async () => {
-    const component = await loadModule('/myComponent.vue', options);
-    // Возвращаем компонент с пропсами
-    return {
-      ...component,
-      props: component.props ? [...component.props, 'imgSrc'] : ['imgSrc'], // Убедитесь, что пропс 'imgSrc' включен в список пропсов компонента
-      setup(props) {
-        // Здесь можно использовать props.imgSrc и другие пропсы
-        return { imgSrc: props.imgSrc };
-      },
-    };
-  });
-
-  // Создание экземпляра приложения Vue с динамическим компонентом и передача пропсов
-  const app = createApp({
-    render() {
-      return h(loadComponent, {
-        imgSrc: imgSrc, // Передача imgSrc как пропса
+      this.dynamicComponent = defineAsyncComponent(async () => {
+        const component = await loadModule('/myComponent.vue', options);
+        return component
       });
-    },
-  });
 
-  app.mount('#renderTarget');
-},
+      this.componentKey++;
+    },
     applyStyles() {
+      document.getElementById('styleElement')?.remove()
       const styleElement = document.createElement('style');
       styleElement.type = 'text/css';
       styleElement.innerHTML = this.cssCode;
+      styleElement.id = 'styleElement';
       document.head.appendChild(styleElement);
-    }
+    },
+    getData() {
+      fetch('http://localhost:5000/api/data')
+        .then((response) => response.json())
+        .then((data) => {
+          this.input.title = data.title;
+          this.input.imageUrl = data.imageUrl;
+          this.input.text = data.text;
+        })
+        .catch((error) => {
+          console.error('Error fetching data:', error);
+        });
+    },
+    updateData() {
+      const updatedData = {
+        title: this.input.title,
+        imageUrl: this.input.imageUrl,
+        text: this.input.text,
+      };
 
+      fetch('http://localhost:5000/api/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData),
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+          this.compileCode();
+          this.applyStyles();
+          console.log('Data successfully updated:', data)
+        })
+        .catch(error => console.error('Error updating data:', error));
+    },
   }
 };
 </script>
 
 <style>
-
 h1 {
   width: 100%;
 }
+
+.code-editor .code-area {
+  height: 80vh;
+}
+
+.code-editor .code-area > textarea {
+  height: 100%;
+  overflow: auto;
+}
+
 .admin-interface {
   margin: 0 auto;
   padding: 20px;
@@ -179,5 +211,12 @@ h1 {
   border-radius: 10px;
   width: 100%;
   padding: 20px;
+}
+
+.data-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 300px;
 }
 </style>
